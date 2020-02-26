@@ -1,0 +1,38 @@
+# This file is part of YSFReflector digital voice linking software
+#
+# Copyright (C) 2020 Veijo Arponen / OH4VA
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+[Unit]
+Description=YSFReflector digital voice linking software
+After=network.target remote-fs.target syslog.target time.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/YSFReflector.pid
+PIDFile=
+ExecStartPre=-/bin/mkdir -p /var/log/YSFReflector
+ExecStartPre=-/bin/chown mmdvm /var/log/YSFReflector
+ExecStart=/usr/local/bin/YSFReflector 
+ExecStartPost=/bin/sh -c 'umask 022; pgrep YSFReflector > /var/run/YSFReflector.pid'
+Restart=on-failure
+TimeoutStartSec=60
+TimeoutStopSec=10
+LimitCORE=infinity
+WorkingDirectory=/home/mmdvm
+
+[Install]
+WantedBy=multi-user.target
