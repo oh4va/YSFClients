@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2009-2014,2016,2017,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2009-2014,2016,2017,2018,2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -29,37 +29,39 @@
 
 class CYSFNetwork {
 public:
-	CYSFNetwork(const std::string& address, unsigned int port, const std::string& callsign, bool debug);
-	CYSFNetwork(unsigned int port, const std::string& callsign, bool debug);
+	CYSFNetwork(const std::string& address, unsigned short port, const std::string& callsign, bool debug);
+	CYSFNetwork(unsigned short port, const std::string& callsign, bool debug);
 	~CYSFNetwork();
 
-	bool open();
-
-	void setDestination(const std::string& name, const in_addr& address, unsigned int port);
+	bool setDestination(const std::string& name, const sockaddr_storage& addr, unsigned int addrLen);
 	void clearDestination();
 
 	void write(const unsigned char* data);
 
 	void writePoll(unsigned int count = 1U);
+	void setOptions(const std::string& options = "");
 	void writeUnlink(unsigned int count = 1U);
 
 	unsigned int read(unsigned char* data);
 
 	void clock(unsigned int ms);
 
-	void close();
-
 private:
 	CUDPSocket                 m_socket;
 	bool                       m_debug;
-	in_addr                    m_address;
-	unsigned int               m_port;
+	sockaddr_storage           m_addr;
+	unsigned int               m_addrLen;
 	unsigned char*             m_poll;
+	unsigned char*             m_options;
+	std::string                m_opt;
 	unsigned char*             m_unlink;
 	CRingBuffer<unsigned char> m_buffer;
 	CTimer                     m_pollTimer;
 	std::string                m_name;
 	bool                       m_linked;
+
+	bool open();
+	void close();
 };
 
 #endif

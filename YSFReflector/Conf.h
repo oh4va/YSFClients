@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2015,2016 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2015,2016,2020,2021 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ public:
   bool         getDaemon() const;
 
   // The Info section
+  unsigned int getId() const;
   std::string  getName() const;
   std::string  getDescription() const;
 
@@ -42,15 +43,21 @@ public:
   unsigned int getLogFileLevel() const;
   std::string  getLogFilePath() const;
   std::string  getLogFileRoot() const;
+  bool         getLogFileRotate() const;
 
   // The Network section
-  unsigned int getNetworkPort() const;
+  unsigned short getNetworkPort() const;
   bool         getNetworkDebug() const;
+
+  // The Block List section
+  std::string  getBlockListFile() const;
+  unsigned int getBlockListTime() const;
 
 private:
   std::string  m_file;
   bool         m_daemon;
 
+  unsigned int m_id;
   std::string  m_name;
   std::string  m_description;
 
@@ -58,9 +65,13 @@ private:
   unsigned int m_logFileLevel;
   std::string  m_logFilePath;
   std::string  m_logFileRoot;
+  bool         m_logFileRotate;
 
-  unsigned int m_networkPort;
+  unsigned short m_networkPort;
   bool         m_networkDebug;
+
+  std::string  m_blockListFile;
+  unsigned int m_blockListTime;
 };
 
 #endif

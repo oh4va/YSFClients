@@ -1,5 +1,5 @@
 /*
-*   Copyright (C) 2016-2019 by Jonathan Naylor G4KLX
+*   Copyright (C) 2016-2020 by Jonathan Naylor G4KLX
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -37,21 +37,21 @@ public:
 	m_name(),
 	m_desc(),
 	m_count("000"),
-	m_address(),
-	m_port(0U),
+	m_addr(),
+	m_addrLen(0U),
 	m_type(YT_YSF),
 	m_wiresX(false)
 	{
 	}
 
-	std::string  m_id;
-	std::string  m_name;
-	std::string  m_desc;
-	std::string  m_count;
-	in_addr      m_address;
-	unsigned int m_port;
-	YSF_TYPE     m_type;
-	bool         m_wiresX;
+	std::string      m_id;
+	std::string      m_name;
+	std::string      m_desc;
+	std::string      m_count;
+	sockaddr_storage m_addr;
+	unsigned int     m_addrLen;
+	YSF_TYPE         m_type;
+	bool             m_wiresX;
 };
 
 class CYSFReflectors {
@@ -59,10 +59,10 @@ public:
 	CYSFReflectors(const std::string& hostsFile, unsigned int reloadTime, bool makeUpper);
 	~CYSFReflectors();
 
-	void setParrot(const std::string& address, unsigned int port);	
-	void setYSF2DMR(const std::string& address, unsigned int port);
-	void setYSF2NXDN(const std::string& address, unsigned int port);
-	void setYSF2P25(const std::string& address, unsigned int port);
+	void setParrot(const std::string& address, unsigned short port);	
+	void setYSF2DMR(const std::string& address, unsigned short port);
+	void setYSF2NXDN(const std::string& address, unsigned short port);
+	void setYSF2P25(const std::string& address, unsigned short port);
 	void addFCSRoom(const std::string& id, const std::string& name);
 
 	bool load();
@@ -81,13 +81,13 @@ public:
 private:
 	std::string                 m_hostsFile;
 	std::string                 m_parrotAddress;
-	unsigned int                m_parrotPort;
+	unsigned short              m_parrotPort;
 	std::string                 m_YSF2DMRAddress;
-	unsigned int                m_YSF2DMRPort;
+	unsigned short              m_YSF2DMRPort;
 	std::string                 m_YSF2NXDNAddress;
-	unsigned int                m_YSF2NXDNPort;
+	unsigned short              m_YSF2NXDNPort;
 	std::string                 m_YSF2P25Address;
-	unsigned int                m_YSF2P25Port;
+	unsigned short              m_YSF2P25Port;
 	std::vector<std::pair<std::string, std::string>> m_fcsRooms;
 	std::vector<CYSFReflector*> m_newReflectors;
 	std::vector<CYSFReflector*> m_currReflectors;

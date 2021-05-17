@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2009-2014,2016 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2009-2014,2016,2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -28,27 +28,30 @@
 
 class CNetwork {
 public:
-	CNetwork(unsigned int port, const std::string& name, const std::string& description, bool debug);
+	CNetwork(unsigned short port, unsigned int id, const std::string& name, const std::string& description, bool debug);
 	~CNetwork();
 
 	bool open();
 
-	bool writeData(const unsigned char* data, const in_addr& address, unsigned int port);
-	bool writePoll(const in_addr& address, unsigned int port);
+	bool writeData(const unsigned char* data, const sockaddr_storage& addr, unsigned int addrLen);
+	bool writePoll(const sockaddr_storage& addr, unsigned int addrLen);
 
-	unsigned int readData(unsigned char* data, unsigned int length, in_addr& address, unsigned int& port);
+	unsigned int readData(unsigned char* data, unsigned int length, sockaddr_storage& addr, unsigned int& addrLen);
 
 	void close();
 
 	void setCount(unsigned int count);
 
 private:
-	CUDPSocket   m_socket;
-	std::string  m_name;
-	std::string  m_description;
-	std::string  m_callsign;
-	bool         m_debug;
+	CUDPSocket     m_socket;
+	unsigned short m_port;
+	unsigned int   m_id;
+	std::string    m_name;
+	std::string    m_description;
+	std::string    m_callsign;
+	bool           m_debug;
 	unsigned char* m_status;
 };
 
 #endif
+

@@ -1,5 +1,5 @@
 /*
-*   Copyright (C) 2016,2018 by Jonathan Naylor G4KLX
+*   Copyright (C) 2016,2018,2020,2021 by Jonathan Naylor G4KLX
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 */
 
 #include "YSFReflector.h"
+#include "BlockList.h"
 #include "StopWatch.h"
 #include "Network.h"
 #include "Version.h"
@@ -79,10 +80,12 @@ CYSFReflector::CYSFReflector(const std::string& file) :
 m_conf(file),
 m_repeaters()
 {
+	CUDPSocket::startup();
 }
 
 CYSFReflector::~CYSFReflector()
 {
+	CUDPSocket::shutdown();
 }
 
 void CYSFReflector::run()
@@ -148,7 +151,11 @@ void CYSFReflector::run()
 	}
 #endif
 
-	ret = ::LogInitialise(m_conf.getLogFilePath(), m_conf.getLogFileRoot(), m_conf.getLogFileLevel(), m_conf.getLogDisplayLevel());
+#if !defined(_WIN32) && !defined(_WIN64)
+        ret = ::LogInitialise(m_daemon, m_conf.getLogFilePath(), m_conf.getLogFileRoot(), m_conf.getLogFileLevel(), m_conf.getLogDisplayLevel(), m_conf.getLogFileRotate());
+#else
+        ret = ::LogInitialise(false, m_conf.getLogFilePath(), m_conf.getLogFileRoot(), m_conf.getLogFileLevel(), m_conf.getLogDisplayLevel(), m_conf.getLogFileRotate());
+#endif
 	if (!ret) {
 		::fprintf(stderr, "YSFReflector: unable to open the log file\n");
 		return;
@@ -162,14 +169,17 @@ void CYSFReflector::run()
 	}
 #endif
 
-	CNetwork network(m_conf.getNetworkPort(), m_conf.getName(), m_conf.getDescription(), m_conf.getNetworkDebug());
+	CNetwork network(m_conf.getNetworkPort(), m_conf.getId(), m_conf.getName(), m_conf.getDescription(), m_conf.getNetworkDebug());
 
 	ret = network.open();
 	if (!ret) {
 		::LogFinalise();
 		return;
 	}
-	
+
+	CBlockList blockList(m_conf.getBlockListFile(), m_conf.getBlockListTime());
+	blockList.start();
+
 	network.setCount(0);
 	
 	CStopWatch stopWatch;
@@ -189,33 +199,38 @@ void CYSFReflector::run()
 	unsigned char src[YSF_CALLSIGN_LENGTH];
 	unsigned char dst[YSF_CALLSIGN_LENGTH];
 
+	bool blocked = false;
+
 	for (;;) {
 		unsigned char buffer[200U];
-		in_addr address;
-		unsigned int port;
+		sockaddr_storage addr;
+		unsigned int addrLen;
 
-		unsigned int len = network.readData(buffer, 200U, address, port);
+		unsigned int len = network.readData(buffer, 200U, addr, addrLen);
 		if (len > 0U) {
-			CYSFRepeater* rpt = findRepeater(address, port);
+			CYSFRepeater* rpt = findRepeater(addr);
 			if (::memcmp(buffer, "YSFP", 4U) == 0) {
 				if (rpt == NULL) {
 					rpt = new CYSFRepeater;
 					rpt->m_callsign = std::string((char*)(buffer + 4U), 10U);
-					rpt->m_address  = address;
-					rpt->m_port     = port;
+					::memcpy(&rpt->m_addr, &addr, sizeof(struct sockaddr_storage));
+					rpt->m_addrLen  = addrLen;
 					m_repeaters.push_back(rpt);
 					network.setCount(m_repeaters.size());
-					LogMessage("Adding %s (%s:%u)", rpt->m_callsign.c_str(), ::inet_ntoa(address), port);
+
+					char buff[80U];
+					LogMessage("Adding %s (%s)", rpt->m_callsign.c_str(), CUDPSocket::display(addr, buff, 80U));
 				}
 				rpt->m_timer.start();
-				network.writePoll(address, port);
+				network.writePoll(addr, addrLen);
 			} else if (::memcmp(buffer + 0U, "YSFU", 4U) == 0 && rpt != NULL) {
-				LogMessage("Removing %s (%s:%u) unlinked", rpt->m_callsign.c_str(), ::inet_ntoa(address), port);
+				char buff[80U];
+				LogMessage("Removing %s (%s) unlinked", rpt->m_callsign.c_str(), CUDPSocket::display(addr, buff, 80U));
+
 				for (std::vector<CYSFRepeater*>::iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
-					CYSFRepeater* itRpt = *it;
-					if (itRpt->m_address.s_addr == rpt->m_address.s_addr && itRpt->m_port == rpt->m_port) {
+					if (CUDPSocket::match((*it)->m_addr, rpt->m_addr)) {
 						m_repeaters.erase(it);
-						delete itRpt;
+						delete *it;
 						break;
 					}
 				}
@@ -234,7 +249,11 @@ void CYSFReflector::run()
 					else
 						::memcpy(dst, "??????????", YSF_CALLSIGN_LENGTH);
 
-					LogMessage("Received data from %10.10s to %10.10s at %10.10s", src, dst, buffer + 4U);
+					blocked = blockList.check(src);
+					if (blocked)
+						LogMessage("Data from %10.10s at %10.10s blocked", src, tag);
+					else
+						LogMessage("Received data from %10.10s to %10.10s at %10.10s", src, dst, tag);
 				} else {
 					if (::memcmp(tag, buffer + 4U, YSF_CALLSIGN_LENGTH) == 0) {
 						bool changed = false;
@@ -249,21 +268,28 @@ void CYSFReflector::run()
 							changed = true;
 						}
 
-						if (changed)
-							LogMessage("Received data from %10.10s to %10.10s at %10.10s", src, dst, buffer + 4U);
+						if (changed) {
+							blocked = blockList.check(src);
+							if (blocked)
+								LogMessage("Data from %10.10s at %10.10s blocked", src, tag);
+							else
+								LogMessage("Received data from %10.10s to %10.10s at %10.10s", src, dst, tag);
+						}
 					}
 				}
 
-				watchdogTimer.start();
+				if (!blocked) {
+					watchdogTimer.start();
 
-				for (std::vector<CYSFRepeater*>::const_iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
-					if ((*it)->m_address.s_addr != address.s_addr || (*it)->m_port != port)
-						network.writeData(buffer, (*it)->m_address, (*it)->m_port);
-				}
+					for (std::vector<CYSFRepeater*>::const_iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
+						if (!CUDPSocket::match((*it)->m_addr, addr))
+							network.writeData(buffer, (*it)->m_addr, (*it)->m_addrLen);
+					}
 
-				if ((buffer[34U] & 0x01U) == 0x01U) {
-					LogMessage("Received end of transmission");
-					watchdogTimer.stop();
+					if ((buffer[34U] & 0x01U) == 0x01U) {
+						LogMessage("Received end of transmission");
+						watchdogTimer.stop();
+					}
 				}
 			}
 		}
@@ -274,7 +300,7 @@ void CYSFReflector::run()
 		pollTimer.clock(ms);
 		if (pollTimer.hasExpired()) {
 			for (std::vector<CYSFRepeater*>::const_iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it)
-				network.writePoll((*it)->m_address, (*it)->m_port);
+				network.writePoll((*it)->m_addr, (*it)->m_addrLen);
 			pollTimer.start();
 		}
 
@@ -283,11 +309,13 @@ void CYSFReflector::run()
 			(*it)->m_timer.clock(ms);
 
 		for (std::vector<CYSFRepeater*>::iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
-			CYSFRepeater* itRpt = *it;
-			if (itRpt->m_timer.hasExpired()) {
-				LogMessage("Removing %s (%s:%u) disappeared", itRpt->m_callsign.c_str(), ::inet_ntoa(itRpt->m_address), itRpt->m_port);
+			if ((*it)->m_timer.hasExpired()) {
+				char buff[80U];
+				LogMessage("Removing %s (%s) disappeared", (*it)->m_callsign.c_str(),
+														   CUDPSocket::display((*it)->m_addr, buff, 80U));
+
 				m_repeaters.erase(it);
-				delete itRpt;
+				delete *it;
 				network.setCount(m_repeaters.size());
 				break;
 			}
@@ -305,6 +333,8 @@ void CYSFReflector::run()
 			dumpTimer.start();
 		}
 
+		blockList.clock(ms);
+
 		if (ms < 5U)
 			CThread::sleep(5U);
 	}
@@ -314,10 +344,10 @@ void CYSFReflector::run()
 	::LogFinalise();
 }
 
-CYSFRepeater* CYSFReflector::findRepeater(const in_addr& address, unsigned int port) const
+CYSFRepeater* CYSFReflector::findRepeater(const sockaddr_storage& addr) const
 {
 	for (std::vector<CYSFRepeater*>::const_iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
-		if (address.s_addr == (*it)->m_address.s_addr && (*it)->m_port == port)
+		if (CUDPSocket::match(addr, (*it)->m_addr))
 			return *it;
 	}
 
@@ -334,11 +364,10 @@ void CYSFReflector::dumpRepeaters() const
 	LogMessage("Currently linked repeaters/gateways:");
 
 	for (std::vector<CYSFRepeater*>::const_iterator it = m_repeaters.begin(); it != m_repeaters.end(); ++it) {
-		std::string callsign = (*it)->m_callsign;
-		in_addr address      = (*it)->m_address;
-		unsigned int port    = (*it)->m_port;
-		unsigned int timer   = (*it)->m_timer.getTimer();
-		unsigned int timeout = (*it)->m_timer.getTimeout();
-		LogMessage("    %s: %s:%u %u/%u", callsign.c_str(), ::inet_ntoa(address), port, timer, timeout);
+		char buffer[80U];
+		LogMessage("    %s: %s %u/%u", (*it)->m_callsign.c_str(),
+									   CUDPSocket::display((*it)->m_addr, buffer, 80U),
+									   (*it)->m_timer.getTimer(),
+									   (*it)->m_timer.getTimeout());
 	}
 }

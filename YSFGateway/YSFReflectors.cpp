@@ -1,5 +1,5 @@
 /*
-*   Copyright (C) 2016-2019 by Jonathan Naylor G4KLX
+*   Copyright (C) 2016-2020 by Jonathan Naylor G4KLX
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -76,25 +76,25 @@ static bool refComparison(const CYSFReflector* r1, const CYSFReflector* r2)
 	return false;
 }
 
-void CYSFReflectors::setParrot(const std::string& address, unsigned int port)
+void CYSFReflectors::setParrot(const std::string& address, unsigned short port)
 {
 	m_parrotAddress = address;
 	m_parrotPort    = port;
 }
 
-void CYSFReflectors::setYSF2DMR(const std::string& address, unsigned int port)
+void CYSFReflectors::setYSF2DMR(const std::string& address, unsigned short port)
 {
 	m_YSF2DMRAddress = address;
 	m_YSF2DMRPort    = port;
 }
 
-void CYSFReflectors::setYSF2NXDN(const std::string& address, unsigned int port)
+void CYSFReflectors::setYSF2NXDN(const std::string& address, unsigned short port)
 {
 	m_YSF2NXDNAddress = address;
 	m_YSF2NXDNPort    = port;
 }
 
-void CYSFReflectors::setYSF2P25(const std::string& address, unsigned int port)
+void CYSFReflectors::setYSF2P25(const std::string& address, unsigned short port)
 {
 	m_YSF2P25Address = address;
 	m_YSF2P25Port    = port;
@@ -127,24 +127,29 @@ bool CYSFReflectors::load()
 			char* p6 = ::strtok(NULL, "\r\n");
 
 			if (p1 != NULL && p2 != NULL && p3 != NULL && p4 != NULL && p5 != NULL && p6 != NULL) {
-				std::string host = std::string(p4);
+				std::string host  = std::string(p4);
+				unsigned short port = (unsigned short)::atoi(p5);
 
-				in_addr address = CUDPSocket::lookup(host);
-				if (address.s_addr != INADDR_NONE) {
+				sockaddr_storage addr;
+				unsigned int addrLen;
+				if (CUDPSocket::lookup(host, port, addr, addrLen) == 0) {
 					CYSFReflector* refl = new CYSFReflector;
+
 					refl->m_id      = std::string(p1);
 					refl->m_name    = std::string(p2);
 					refl->m_desc    = std::string(p3);
-					refl->m_address = address;
-					refl->m_port    = (unsigned int)::atoi(p5);
+					refl->m_addr    = addr;
+					refl->m_addrLen = addrLen;
 					refl->m_count   = std::string(p6);
 					refl->m_type    = YT_YSF;
-					refl->m_wiresX  = false;
+					refl->m_wiresX  = (refl->m_name.compare(0, 3, "XLX") == 0);
 
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 
 					m_newReflectors.push_back(refl);
+				} else {
+					LogWarning("Unable to resolve the address of YSF reflector - %s", p2);
 				}
 			}
 		}
@@ -157,70 +162,94 @@ bool CYSFReflectors::load()
 
 	// Add the Parrot entry
 	if (m_parrotPort > 0U) {
-		CYSFReflector* refl = new CYSFReflector;
-		refl->m_id      = "00001";
-		refl->m_name    = "ZZ Parrot       ";
-		refl->m_desc    = "Parrot        ";
-		refl->m_address = CUDPSocket::lookup(m_parrotAddress);
-		refl->m_port    = m_parrotPort;
-		refl->m_count   = "000";
-		refl->m_type    = YT_YSF;
-		refl->m_wiresX  = false;
+		sockaddr_storage addr;
+		unsigned int addrLen;
+		if (CUDPSocket::lookup(m_parrotAddress, m_parrotPort, addr, addrLen) == 0) {
+			CYSFReflector* refl = new CYSFReflector;
+			refl->m_id      = "00001";
+			refl->m_name    = "ZZ Parrot       ";
+			refl->m_desc    = "Parrot        ";
+			refl->m_addr    = addr;
+			refl->m_addrLen = addrLen;
+			refl->m_count   = "000";
+			refl->m_type    = YT_YSF;
+			refl->m_wiresX  = false;
 
-		m_newReflectors.push_back(refl);
+			m_newReflectors.push_back(refl);
 
-		LogInfo("Loaded YSF parrot");
+			LogInfo("Loaded YSF parrot");
+		} else {
+			LogWarning("Unable to resolve the address of the YSF Parrot");
+		}
 	}
 
 	// Add the YSF2DMR entry
 	if (m_YSF2DMRPort > 0U) {
-		CYSFReflector* refl = new CYSFReflector;
-		refl->m_id      = "00002";
-		refl->m_name    = "YSF2DMR         ";
-		refl->m_desc    = "Link YSF2DMR  ";
-		refl->m_address = CUDPSocket::lookup(m_YSF2DMRAddress);
-		refl->m_port    = m_YSF2DMRPort;
-		refl->m_count   = "000";
-		refl->m_type    = YT_YSF;
-		refl->m_wiresX  = true;
+		sockaddr_storage addr;
+		unsigned int addrLen;
+		if (CUDPSocket::lookup(m_YSF2DMRAddress, m_YSF2DMRPort, addr, addrLen) == 0) {
+			CYSFReflector* refl = new CYSFReflector;
+			refl->m_id      = "00002";
+			refl->m_name    = "YSF2DMR         ";
+			refl->m_desc    = "Link YSF2DMR  ";
+			refl->m_addr    = addr;
+			refl->m_addrLen = addrLen;
+			refl->m_count   = "000";
+			refl->m_type    = YT_YSF;
+			refl->m_wiresX  = true;
 
-		m_newReflectors.push_back(refl);
+			m_newReflectors.push_back(refl);
 
-		LogInfo("Loaded YSF2DMR");
+			LogInfo("Loaded YSF2DMR");
+		} else {
+			LogWarning("Unable to resolve the address of YSF2DMR");
+		}
 	}
 
 	// Add the YSF2NXDN entry
 	if (m_YSF2NXDNPort > 0U) {
-		CYSFReflector* refl = new CYSFReflector;
-		refl->m_id      = "00003";
-		refl->m_name    = "YSF2NXDN        ";
-		refl->m_desc    = "Link YSF2NXDN ";
-		refl->m_address = CUDPSocket::lookup(m_YSF2NXDNAddress);
-		refl->m_port    = m_YSF2NXDNPort;
-		refl->m_count   = "000";
-		refl->m_type    = YT_YSF;
-		refl->m_wiresX  = true;
+		sockaddr_storage addr;
+		unsigned int addrLen;
+		if (CUDPSocket::lookup(m_YSF2NXDNAddress, m_YSF2NXDNPort, addr, addrLen) == 0) {
+			CYSFReflector* refl = new CYSFReflector;
+			refl->m_id      = "00003";
+			refl->m_name    = "YSF2NXDN        ";
+			refl->m_desc    = "Link YSF2NXDN ";
+			refl->m_addr    = addr;
+			refl->m_addrLen = addrLen;
+			refl->m_count   = "000";
+			refl->m_type    = YT_YSF;
+			refl->m_wiresX  = true;
 
-		m_newReflectors.push_back(refl);
+			m_newReflectors.push_back(refl);
 
-		LogInfo("Loaded YSF2NXDN");
+			LogInfo("Loaded YSF2NXDN");
+		} else {
+			LogWarning("Unable to resolve the address of YSF2NXDN");
+		}
 	}
 
 	// Add the YSF2P25 entry
 	if (m_YSF2P25Port > 0U) {
-		CYSFReflector* refl = new CYSFReflector;
-		refl->m_id      = "00004";
-		refl->m_name    = "YSF2P25         ";
-		refl->m_desc    = "Link YSF2P25  ";
-		refl->m_address = CUDPSocket::lookup(m_YSF2P25Address);
-		refl->m_port    = m_YSF2P25Port;
-		refl->m_count   = "000";
-		refl->m_type    = YT_YSF;
-		refl->m_wiresX  = true;
+		sockaddr_storage addr;
+		unsigned int addrLen;
+		if (CUDPSocket::lookup(m_YSF2P25Address, m_YSF2P25Port, addr, addrLen) == 0) {
+			CYSFReflector* refl = new CYSFReflector;
+			refl->m_id      = "00004";
+			refl->m_name    = "YSF2P25         ";
+			refl->m_desc    = "Link YSF2P25  ";
+			refl->m_addr    = addr;
+			refl->m_addrLen = addrLen;
+			refl->m_count   = "000";
+			refl->m_type    = YT_YSF;
+			refl->m_wiresX  = true;
 
-		m_newReflectors.push_back(refl);
+			m_newReflectors.push_back(refl);
 
-		LogInfo("Loaded YSF2P25");
+			LogInfo("Loaded YSF2P25");
+		} else {
+			LogWarning("Unable to resolve the address of YSF2P25");
+		}
 	}
 
 	unsigned int id = 10U;
@@ -232,13 +261,13 @@ bool CYSFReflectors::load()
 		std::string desc = it->second;
 
 		CYSFReflector* refl = new CYSFReflector;
-		refl->m_id     = text;
-		refl->m_name   = name;
-		refl->m_desc   = desc;
-		refl->m_port   = 0U;
-		refl->m_count  = "000";
-		refl->m_type   = YT_FCS;
-		refl->m_wiresX = false;
+		refl->m_id      = text;
+		refl->m_name    = name;
+		refl->m_desc    = desc;
+		refl->m_addrLen = 0U;
+		refl->m_count   = "000";
+		refl->m_type    = YT_FCS;
+		refl->m_wiresX  = false;
 
 		refl->m_name.resize(16U, ' ');
 		refl->m_desc.resize(14U, ' ');

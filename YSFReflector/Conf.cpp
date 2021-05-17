@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2015,2016 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2015,2016,2020,2021 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -31,20 +31,25 @@ enum SECTION {
   SECTION_GENERAL,
   SECTION_INFO,
   SECTION_LOG,
-  SECTION_NETWORK
+  SECTION_NETWORK,
+  SECTION_BLOCKLIST
 };
 
 CConf::CConf(const std::string& file) :
 m_file(file),
 m_daemon(false),
+m_id(0U),
 m_name(),
 m_description(),
 m_logDisplayLevel(0U),
 m_logFileLevel(0U),
 m_logFilePath(),
 m_logFileRoot(),
+m_logFileRotate(true),
 m_networkPort(0U),
-m_networkDebug(false)
+m_networkDebug(false),
+m_blockListFile(),
+m_blockListTime(5U)
 {
 }
 
@@ -76,6 +81,8 @@ bool CConf::read()
 			  section = SECTION_LOG;
 		  else if (::strncmp(buffer, "[Network]", 9U) == 0)
 			  section = SECTION_NETWORK;
+		  else if (::strncmp(buffer, "[Block List]", 12U) == 0)
+			  section = SECTION_BLOCKLIST;
 		  else
 			  section = SECTION_NONE;
 
@@ -87,11 +94,33 @@ bool CConf::read()
 		  continue;
 
 	  char* value = ::strtok(NULL, "\r\n");
+	  if (value == NULL)
+		  continue;
+
+	  // Remove quotes from the value
+	  size_t len = ::strlen(value);
+	  if (len > 1U && *value == '"' && value[len - 1U] == '"') {
+		  value[len - 1U] = '\0';
+		  value++;
+	  } else {
+		  char *p;
+
+		  // if value is not quoted, remove after # (to make comment)
+		  if ((p = strchr(value, '#')) != NULL)
+			  *p = '\0';
+
+		  // remove trailing tab/space
+		  for (p = value + strlen(value) - 1U; p >= value && (*p == '\t' || *p == ' '); p--)
+			  *p = '\0';
+	  }
+
 	  if (section == SECTION_GENERAL) {
 		  if (::strcmp(key, "Daemon") == 0)
 			  m_daemon = ::atoi(value) == 1;
 	  } else if (section == SECTION_INFO) {
-		  if (::strcmp(key, "Name") == 0)
+		  if (::strcmp(key, "Id") == 0)
+			  m_id = (unsigned int)::atoi(value);
+		  else if (::strcmp(key, "Name") == 0)
 			  m_name = value;
 		  else if (::strcmp(key, "Description") == 0)
 			  m_description = value;
@@ -104,11 +133,18 @@ bool CConf::read()
 			  m_logFileLevel = (unsigned int)::atoi(value);
 		  else if (::strcmp(key, "DisplayLevel") == 0)
 			  m_logDisplayLevel = (unsigned int)::atoi(value);
+		  else if (::strcmp(key, "FileRotate") == 0)
+			  m_logFileRotate = ::atoi(value) == 1;
 	  } else if (section == SECTION_NETWORK) {
 		  if (::strcmp(key, "Port") == 0)
-			  m_networkPort = (unsigned int)::atoi(value);
+			  m_networkPort = (unsigned short)::atoi(value);
 		  else if (::strcmp(key, "Debug") == 0)
 			  m_networkDebug = ::atoi(value) == 1;
+	  } else if (section == SECTION_BLOCKLIST) {
+		  if (::strcmp(key, "File") == 0)
+			  m_blockListFile = value;
+		  else if (::strcmp(key, "Time") == 0)
+			  m_blockListTime = (unsigned int)::atoi(value);
 	  }
   }
 
@@ -120,6 +156,11 @@ bool CConf::read()
 bool CConf::getDaemon() const
 {
 	return m_daemon;
+}
+
+unsigned int CConf::getId() const
+{
+	return m_id;
 }
 
 std::string CConf::getName() const
@@ -144,15 +185,20 @@ unsigned int CConf::getLogFileLevel() const
 
 std::string CConf::getLogFilePath() const
 {
-  return m_logFilePath;
+	return m_logFilePath;
 }
 
 std::string CConf::getLogFileRoot() const
 {
-  return m_logFileRoot;
+	return m_logFileRoot;
 }
 
-unsigned int CConf::getNetworkPort() const
+bool CConf::getLogFileRotate() const
+{
+	return m_logFileRotate;
+}
+
+unsigned short CConf::getNetworkPort() const
 {
 	return m_networkPort;
 }
@@ -160,4 +206,14 @@ unsigned int CConf::getNetworkPort() const
 bool CConf::getNetworkDebug() const
 {
 	return m_networkDebug;
+}
+
+std::string CConf::getBlockListFile() const
+{
+	return m_blockListFile;
+}
+
+unsigned int CConf::getBlockListTime() const
+{
+	return m_blockListTime;
 }

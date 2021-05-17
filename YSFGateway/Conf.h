@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2015-2019 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2015-2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -34,11 +34,12 @@ public:
   std::string  getSuffix() const;
   unsigned int getId() const;
   std::string  getRptAddress() const;
-  unsigned int getRptPort() const;
+  unsigned short getRptPort() const;
   std::string  getMyAddress() const;
-  unsigned int getMyPort() const;
+  unsigned short getMyPort() const;
   bool         getWiresXMakeUpper() const;
   bool         getWiresXCommandPassthrough() const;
+  bool         getDebug() const;
   bool         getDaemon() const;
 
   // The Info section
@@ -56,44 +57,49 @@ public:
   unsigned int getLogFileLevel() const;
   std::string  getLogFilePath() const;
   std::string  getLogFileRoot() const;
+  bool         getLogFileRotate() const;
 
-  // The aprs.fi section
+  // The APRS section
   bool         getAPRSEnabled() const;
-  std::string  getAPRSServer() const;
-  unsigned int getAPRSPort() const;
-  std::string  getAPRSPassword() const;
+  std::string  getAPRSAddress() const;
+  unsigned short getAPRSPort() const;
   std::string  getAPRSSuffix() const;
   std::string  getAPRSDescription() const;
 
   // The Network section
   std::string  getNetworkStartup() const;
+  std::string  getNetworkOptions() const;
   unsigned int getNetworkInactivityTimeout() const;
   bool         getNetworkRevert() const;
   bool         getNetworkDebug() const;
 
   // The YSF Network section
   bool         getYSFNetworkEnabled() const;
-  unsigned int getYSFNetworkPort() const;
+  unsigned short getYSFNetworkPort() const;
   std::string  getYSFNetworkHosts() const;
   unsigned int getYSFNetworkReloadTime() const;
   std::string  getYSFNetworkParrotAddress() const;
-  unsigned int getYSFNetworkParrotPort() const;
+  unsigned short getYSFNetworkParrotPort() const;
   std::string  getYSFNetworkYSF2DMRAddress() const;
-  unsigned int getYSFNetworkYSF2DMRPort() const;
+  unsigned short getYSFNetworkYSF2DMRPort() const;
   std::string  getYSFNetworkYSF2NXDNAddress() const;
-  unsigned int getYSFNetworkYSF2NXDNPort() const;
+  unsigned short getYSFNetworkYSF2NXDNPort() const;
   std::string  getYSFNetworkYSF2P25Address() const;
-  unsigned int getYSFNetworkYSF2P25Port() const;
+  unsigned short getYSFNetworkYSF2P25Port() const;
 
   // The FCS Network section
   bool         getFCSNetworkEnabled() const;
   std::string  getFCSNetworkFile() const;
-  unsigned int getFCSNetworkPort() const;
+  unsigned short getFCSNetworkPort() const;
 
-  // The Mobile GPS section
-  bool         getMobileGPSEnabled() const;
-  std::string  getMobileGPSAddress() const;
-  unsigned int getMobileGPSPort() const;
+  // The GPSD section
+  bool         getGPSDEnabled() const;
+  std::string  getGPSDAddress() const;
+  std::string  getGPSDPort() const;
+
+  // The Remote Commands section
+  bool         getRemoteCommandsEnabled() const;
+  unsigned short getRemoteCommandsPort() const;
 
 private:
   std::string  m_file;
@@ -101,11 +107,12 @@ private:
   std::string  m_suffix;
   unsigned int m_id;
   std::string  m_rptAddress;
-  unsigned int m_rptPort;
+  unsigned short m_rptPort;
   std::string  m_myAddress;
-  unsigned int m_myPort;
+  unsigned short m_myPort;
   bool         m_wiresXMakeUpper;
   bool         m_wiresXCommandPassthrough;
+  bool         m_debug;
   bool         m_daemon;
 
   unsigned int m_rxFrequency;
@@ -121,39 +128,43 @@ private:
   unsigned int m_logFileLevel;
   std::string  m_logFilePath;
   std::string  m_logFileRoot;
+  bool         m_logFileRotate;
 
   bool         m_aprsEnabled;
-  std::string  m_aprsServer;
-  unsigned int m_aprsPort;
-  std::string  m_aprsPassword;
+  std::string  m_aprsAddress;
+  unsigned short m_aprsPort;
   std::string  m_aprsSuffix;
   std::string  m_aprsDescription;
 
   std::string  m_networkStartup;
+  std::string  m_networkOptions;
   unsigned int m_networkInactivityTimeout;
   bool         m_networkRevert;
   bool         m_networkDebug;
 
   bool         m_ysfNetworkEnabled;
-  unsigned int m_ysfNetworkPort;
+  unsigned short m_ysfNetworkPort;
   std::string  m_ysfNetworkHosts;
   unsigned int m_ysfNetworkReloadTime;
   std::string  m_ysfNetworkParrotAddress;
-  unsigned int m_ysfNetworkParrotPort;
+  unsigned short m_ysfNetworkParrotPort;
   std::string  m_ysfNetworkYSF2DMRAddress;
-  unsigned int m_ysfNetworkYSF2DMRPort;
+  unsigned short m_ysfNetworkYSF2DMRPort;
   std::string  m_ysfNetworkYSF2NXDNAddress;
-  unsigned int m_ysfNetworkYSF2NXDNPort;
+  unsigned short m_ysfNetworkYSF2NXDNPort;
   std::string  m_ysfNetworkYSF2P25Address;
-  unsigned int m_ysfNetworkYSF2P25Port;
+  unsigned short m_ysfNetworkYSF2P25Port;
 
   bool         m_fcsNetworkEnabled;
   std::string  m_fcsNetworkFile;
-  unsigned int m_fcsNetworkPort;
+  unsigned short m_fcsNetworkPort;
 
-  bool         m_mobileGPSEnabled;
-  std::string  m_mobileGPSAddress;
-  unsigned int m_mobileGPSPort;
+  bool         m_gpsdEnabled;
+  std::string  m_gpsdAddress;
+  std::string  m_gpsdPort;
+
+  bool         m_remoteCommandsEnabled;
+  unsigned short m_remoteCommandsPort;
 };
 
 #endif

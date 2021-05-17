@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2009-2014,2016,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2009-2014,2016,2018,2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -24,10 +24,10 @@
 
 const unsigned int BUFFER_LENGTH = 200U;
 
-CNetwork::CNetwork(unsigned int port) :
+CNetwork::CNetwork(unsigned short port) :
 m_socket(port),
-m_address(),
-m_port(0U)
+m_addr(),
+m_addrLen(0U)
 {
 }
 
@@ -44,15 +44,15 @@ bool CNetwork::open()
 
 bool CNetwork::write(const unsigned char* data)
 {
-	if (m_port == 0U)
+	if (m_addrLen == 0U)
 		return true;
 
 	assert(data != NULL);
 
-	return m_socket.write(data, 155U, m_address, m_port);
+	return m_socket.write(data, 155U, m_addr, m_addrLen);
 }
 
-bool CNetwork::writePoll(const in_addr& address, unsigned int port)
+bool CNetwork::writePoll(const sockaddr_storage& addr, unsigned int addrLen)
 {
 	unsigned char buffer[20U];
 
@@ -72,22 +72,30 @@ bool CNetwork::writePoll(const in_addr& address, unsigned int port)
 	buffer[12U] = ' ';
 	buffer[13U] = ' ';
 
-	return m_socket.write(buffer, 14U, address, port);
+	return m_socket.write(buffer, 14U, addr, addrLen);
 }
 
 unsigned int CNetwork::read(unsigned char* data)
 {
-	in_addr address;
-	unsigned int port;
-	int length = m_socket.read(data, BUFFER_LENGTH, address, port);
+	sockaddr_storage addr;
+	unsigned int addrLen;
+	int length = m_socket.read(data, BUFFER_LENGTH, addr, addrLen);
 	if (length <= 0)
 		return 0U;
 
 	// Handle incoming polls
 	if (::memcmp(data, "YSFP", 4U) == 0) {
-		writePoll(address, port);
+		writePoll(addr, addrLen);
 		return 0U;
 	}
+
+	// Throw away incoming options messages
+	if (::memcmp(data, "YSFO", 4U) == 0)
+		return 0U;
+
+	// Throw away incoming info messages
+	if (::memcmp(data, "YSFI", 4U) == 0)
+		return 0U;
 
 	// Handle incoming unlinks
 	if (::memcmp(data, "YSFU", 4U) == 0)
@@ -97,7 +105,7 @@ unsigned int CNetwork::read(unsigned char* data)
 	if (::memcmp(data, "YSFS", 4U) == 0) {
 		unsigned char status[50U];
 		::sprintf((char*)status, "YSFS%05u%-16.16s%-14.14s%03u", 1U, "Parrot", "Parrot", 0U);
-		m_socket.write(status, 42U, address, port);
+		m_socket.write(status, 42U, addr, addrLen);
 		return 0U;
 	}
 
@@ -105,15 +113,15 @@ unsigned int CNetwork::read(unsigned char* data)
 	if (::memcmp(data, "YSFD", 4U) != 0)
 		return 0U;
 
-	m_address.s_addr = address.s_addr;
-	m_port = port;
+	m_addr    = addr;
+	m_addrLen = addrLen;
 
 	return 155U;
 }
 
 void CNetwork::end()
 {
-	m_port = 0U;
+	m_addrLen = 0U;
 }
 
 void CNetwork::close()

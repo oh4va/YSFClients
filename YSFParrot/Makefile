@@ -1,5 +1,5 @@
-CC      = gcc
-CXX     = g++
+CC      = cc
+CXX     = c++
 CFLAGS  = -g -O3 -Wall -std=c++0x -pthread
 LIBS    = -lpthread
 LDFLAGS = -g
@@ -13,6 +13,9 @@ YSFParrot:	$(OBJECTS)
 
 %.o: %.cpp
 		$(CXX) $(CFLAGS) -c -o $@ $<
+
+install:
+		install -m 755 YSFParrot /usr/local/bin/
 
 clean:
 		$(RM) YSFParrot *.o *.d *.bak *~

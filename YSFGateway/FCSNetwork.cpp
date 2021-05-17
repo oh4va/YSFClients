@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2009-2014,2016,2017,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2009-2014,2016,2017,2018,2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -29,11 +29,14 @@ const char* FCS_VERSION = "MMDVM";
 
 const unsigned int BUFFER_LENGTH = 200U;
 
-CFCSNetwork::CFCSNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, unsigned int id, bool debug) :
+CFCSNetwork::CFCSNetwork(unsigned short port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, unsigned int id, bool debug) :
 m_socket(port),
 m_debug(debug),
-m_address(),
+m_addr(),
+m_addrLen(),
 m_ping(NULL),
+m_options(NULL),
+m_opt(),
 m_info(NULL),
 m_reflector(),
 m_print(),
@@ -52,30 +55,37 @@ m_state(FCS_UNLINKED)
 	::memset(m_ping + 4U, ' ', 6U);
 	::memcpy(m_ping + 4U, callsign.c_str(), callsign.size());
 	::memset(m_ping + 10U, 0x00U, 15U);
+
+	m_options = new unsigned char[50U];
+	::memcpy(m_options + 0U, "FCSO", 4U);
+	::memset(m_options + 4U, ' ', 46U);
+	::memcpy(m_options + 4U, callsign.c_str(), callsign.size());
 }
 
 CFCSNetwork::~CFCSNetwork()
 {
 	delete[] m_info;
 	delete[] m_ping;
+	delete[] m_options;
 }
 
 bool CFCSNetwork::open()
 {
-	LogMessage("Resolving FCS00x addresses");
+	LogMessage("Resolving FCS999 address");
 
-	m_addresses["FCS001"] = CUDPSocket::lookup("fcs001.xreflector.net");
-	m_addresses["FCS002"] = CUDPSocket::lookup("fcs002.xreflector.net");
-	m_addresses["FCS003"] = CUDPSocket::lookup("fcs003.xreflector.net");
-	m_addresses["FCS004"] = CUDPSocket::lookup("fcs004.xreflector.net");
-	m_addresses["FCS005"] = CUDPSocket::lookup("fcs005.xreflector.net");
-	m_addresses["FCS222"] = CUDPSocket::lookup("fcs222.xreflector.net");
-	m_addresses["FCS224"] = CUDPSocket::lookup("fcs224.xreflector.net");
-	m_addresses["FCS232"] = CUDPSocket::lookup("fcs232.xreflector.net");
+	sockaddr_storage addr;
+	unsigned int addrLen;
+	if (CUDPSocket::lookup("fcs999.xreflector.net", FCS_PORT, addr, addrLen) != 0) {
+		LogWarning("Unable to lookup the address for FCS999");
+		return false;
+	} else {
+		std::pair<sockaddr_storage, unsigned int> entry = std::make_pair(addr, addrLen);
+		m_addresses["FCS999"] = entry;
+	}
 
 	LogMessage("Opening FCS network connection");
 
-	return m_socket.open();
+	return m_socket.open(addr);
 }
 
 void CFCSNetwork::clearDestination()
@@ -96,28 +106,33 @@ void CFCSNetwork::write(const unsigned char* data)
 	unsigned char buffer[130U];
 	::memset(buffer + 0U, ' ', 130U);
 	::memcpy(buffer + 0U, data + 35U, 120U);
+	::memcpy(buffer + 120U, data + 34U, 1U);
 	::memcpy(buffer + 121U, m_reflector.c_str(), 8U);
 
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Sent", buffer, 130U);
 
-	m_socket.write(buffer, 130U, m_address, FCS_PORT);
+	m_socket.write(buffer, 130U, m_addr, m_addrLen);
 }
 
 bool CFCSNetwork::writeLink(const std::string& reflector)
 {
 	if (m_state != FCS_LINKED) {
 		std::string name = reflector.substr(0U, 6U);
-		if (m_addresses.count(name) == 0U) {
-			LogError("Unknown FCS reflector - %s", name.c_str());
-			return false;
-		}
+		
+		if (m_addresses.count(name) == 0U) {			
+			char url[30U];
+			::sprintf(url, "%s.xreflector.net", name.c_str());
 
-		m_address = m_addresses[name];
-		if (m_address.s_addr == INADDR_NONE) {
-			LogError("FCS reflector %s has no address", name.c_str());
-			return false;
-		}
+			if (CUDPSocket::lookup(url, FCS_PORT, m_addr, m_addrLen) != 0) {
+				LogWarning("Unknown FCS reflector - %s", name.c_str());
+				return false;
+			}
+   		} else {
+			std::pair<sockaddr_storage, unsigned int> entry = m_addresses[name];
+			m_addr    = entry.first;
+			m_addrLen = entry.second;
+   		}
 	}
 
 	m_reflector = reflector;
@@ -134,13 +149,18 @@ bool CFCSNetwork::writeLink(const std::string& reflector)
 	return true;
 }
 
+void CFCSNetwork::setOptions(const std::string& options)
+{
+	m_opt = options;
+}
+
 void CFCSNetwork::writeUnlink(unsigned int count)
 {
 	if (m_state != FCS_LINKED)
 		return;
 
 	for (unsigned int i = 0U; i < count; i++)
-		m_socket.write((unsigned char*)"CLOSE      ", 11U, m_address, FCS_PORT);
+		m_socket.write((unsigned char*)"CLOSE      ", 11U, m_addr, m_addrLen);
 }
 
 void CFCSNetwork::clock(unsigned int ms)
@@ -159,16 +179,16 @@ void CFCSNetwork::clock(unsigned int ms)
 
 	unsigned char buffer[BUFFER_LENGTH];
 
-	in_addr address;
-	unsigned int port;
-	int length = m_socket.read(buffer, BUFFER_LENGTH, address, port);
+	sockaddr_storage addr;
+	unsigned int addrLen;
+	int length = m_socket.read(buffer, BUFFER_LENGTH, addr, addrLen);
 	if (length <= 0)
 		return;
 
 	if (m_state == FCS_UNLINKED)
 		return;
 
-	if (address.s_addr != m_address.s_addr || port != FCS_PORT)
+	if (!CUDPSocket::match(addr, m_addr))
 		return;
 
 	if (m_debug)
@@ -179,12 +199,14 @@ void CFCSNetwork::clock(unsigned int ms)
 			LogMessage("Linked to %s", m_print.c_str());
 		m_state = FCS_LINKED;
 		writeInfo();
+		writeOptions(m_print);
 	}
 
 	if (length == 10 && m_state == FCS_LINKING) {
 		LogMessage("Linked to %s", m_print.c_str());
 		m_state = FCS_LINKED;
 		writeInfo();
+		writeOptions(m_print);
 	}
 
 	if (length == 7 || length == 10 || length == 130) {
@@ -248,7 +270,7 @@ void CFCSNetwork::writeInfo()
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Sent", m_info, 100U);
 
-	m_socket.write(m_info, 100U, m_address, FCS_PORT);
+	m_socket.write(m_info, 100U, m_addr, m_addrLen);
 }
 
 void CFCSNetwork::writePing()
@@ -259,5 +281,23 @@ void CFCSNetwork::writePing()
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Sent", m_ping, 25U);
 
-	m_socket.write(m_ping, 25U, m_address, FCS_PORT);
+	m_socket.write(m_ping, 25U, m_addr, m_addrLen);
+}
+
+void CFCSNetwork::writeOptions(const std::string& reflector)
+{
+	if (m_state != FCS_LINKED)
+		return;
+
+	if (m_opt.size() < 1)
+		return;
+
+	::memset(m_options + 14U, 0x20U, 36U);
+	::memcpy(m_options + 4U, (reflector.substr(0,6)+reflector.substr(7,2)).c_str(), 8U);
+	::memcpy(m_options + 12U, m_opt.c_str(), m_opt.size());
+
+	if (m_debug)
+		CUtils::dump(1U, "FCS Network Options Sent", m_options, 50U);
+
+	m_socket.write(m_options, 50U, m_addr, m_addrLen);
 }

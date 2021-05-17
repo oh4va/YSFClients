@@ -36,10 +36,12 @@ enum FCS_STATE {
 
 class CFCSNetwork {
 public:
-	CFCSNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, unsigned int id, bool debug);
+	CFCSNetwork(unsigned short port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, unsigned int id, bool debug);
 	~CFCSNetwork();
 
 	bool open();
+
+	void setOptions(const std::string& options);
 
 	void clearDestination();
 
@@ -58,18 +60,22 @@ public:
 private:
 	CUDPSocket                     m_socket;
 	bool                           m_debug;
-	in_addr                        m_address;
+	sockaddr_storage               m_addr;
+	unsigned int                   m_addrLen;
 	unsigned char*                 m_ping;
+	unsigned char*                 m_options;
+	std::string                    m_opt;
 	unsigned char*                 m_info;
 	std::string                    m_reflector;
 	std::string                    m_print;
 	CRingBuffer<unsigned char>     m_buffer;
-	std::map<std::string, in_addr> m_addresses;
+	std::map<std::string, std::pair<sockaddr_storage, unsigned int>> m_addresses;
 	unsigned char                  m_n;
 	CTimer                         m_pingTimer;
 	CTimer                         m_resetTimer;
 	FCS_STATE                      m_state;
 
+	void writeOptions(const std::string& reflector);
 	void writeInfo();
 	void writePing();
 };
